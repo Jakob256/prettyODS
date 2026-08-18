@@ -228,11 +228,11 @@ SHEET <- R6Class("ODSsheet",
                    
                    
                    nrow = function(...){
-                     return(max(0,sheet$cellsContent$row))
+                     return(max(0,self$cellsContent$row))
                    },
                    
                    ncol = function(...){
-                     return(max(0,sheet$cellsContent$column))
+                     return(max(0,self$cellsContent$column))
                    },
                    
                    
@@ -250,7 +250,7 @@ SHEET <- R6Class("ODSsheet",
                        NAMES=unique(NAMES)
                        NAMES=NAMES[order(nchar(NAMES),NAMES)]
                      }
-                     colnames(sheet)=NAMES[1:ncol(sheet)]
+                     colnames(sheet)=NAMES[seq_len(ncol(sheet))]
                      View(sheet)
                      return(invisible(sheet))
                    }
