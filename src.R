@@ -21,76 +21,13 @@ library(data.table)
 ### 2.1. ODSstyle ####
 #~~~~~~~~~~~~~~~~~~~~~
 
-setClass(
-  "ODSstyle",
-  slots = c(
-    font = "character",
-    size = "integer",
-    color= "character",
-    bold = "logical",
-    italic="logical",
-    underline="logical",
-    cellcolor="character",
-    vAlign="character",
-    hAlign="character", 
-    margin="numeric",
-    wrap="logical", 
-    rotate="integer",
-    minDigits="integer",
-    maxDigits="integer",
-    .color="character",
-    .cellcolor="character",
-    .key="character"
-  ),
-  
-  prototype = list(
-    font = NA_character_,
-    size = NA_integer_,
-    color= NA_character_,
-    bold = NA,
-    italic=NA,
-    underline=NA,
-    cellcolor=NA_character_,
-    vAlign=NA_character_,
-    hAlign=NA_character_, 
-    margin=NA_real_,
-    wrap=NA, 
-    rotate=NA_integer_,
-    minDigits=NA_integer_,
-    maxDigits=NA_integer_,
-    .color=NA_character_,
-    .cellcolor=NA_character_,
-    .key=NA_character_
-  ),
-  
-  validity = function(object) {
-    slots_to_check <- slotNames(object)
-    for (s in slots_to_check) {
-      if (length(slot(object, s))!=1){
-        return(paste0("slot '", s, "' must be a single value"))
-      }
-    }
-    
-    ## alternative way:
-    ## if (length(object@font) != 1){return("slot 'font' must be a single string")}
-    
-    return(TRUE)
-  }
-)
 
-setMethod(
-  "show",
-  "ODSstyle",
-  function(object){
-    cat("ODSstyle\n")
-    slots_to_check <- slotNames(object)
-    for (s in slots_to_check){
-      if (substr(s,1,1)=="."){next}
-      value=slot(object, s)
-      if (!is.na(value)){cat("  ",s,":", value, "\n")}
-    }
-  }
-)
+col2hex <- function(colors){
+  rgb=col2rgb(colors)
+  hex=sprintf("#%02X%02X%02X", rgb[1,], rgb[2,], rgb[3,])
+  hex[is.na(colors)]=NA
+  return(hex)
+}
 
 
 ODS_createStyle <- function(font=NULL, size=NULL, color=NULL, bold=NULL, italic=NULL, 
@@ -98,72 +35,28 @@ ODS_createStyle <- function(font=NULL, size=NULL, color=NULL, bold=NULL, italic=
                             margin=NULL, wrap=NULL, rotate=NULL, minDigits=NULL, 
                             maxDigits=NULL){
   
-  g <- function(a,type){
-    if (is.na(a)||is.null(a)){
-      if (type=="character"){return(NA_character_)}
-      if (type=="integer"){return(NA_integer_)}
-      if (type=="numeric"){return(NA_real_)}
-      if (type=="logical"){return(NA)}
-    }
-    if (type=="integer"){return(as.integer(a))}
-    return(a)
+  style=as.list(environment())
+  style=style[!sapply(style, is.null)]
+  class(style)="ODSstyle"
+  
+  ## these throw an error, if the colors are not valid:
+  col2hex(color)
+  col2hex(cellcolor)
+  
+  
+  
+  temp=unlist(lapply(style,length))
+  temp=temp[temp>1]
+  if (length(temp)!=0){stop(paste(names(temp),collapse=", "),": must be a single value")}
+  
+  return(style)
+}
+
+print.ODSstyle <- function(style){
+  cat("ODSstyle\n")
+  for (name in names(style)){
+    cat("  ",name,": ",style[[name]],"\n", sep = "")
   }
-  
-  font       =g(font,"character")
-  size       =g(size,"integer")
-  color      =g(color,"character")
-  bold       =g(bold,"logical")
-  italic     =g(italic,"logical")
-  underline  =g(underline,"logical")
-  cellcolor  =g(cellcolor,"character")
-  vAlign     =g(vAlign,"character")
-  hAlign     =g(hAlign,"character")
-  margin     =g(margin,"numeric")
-  wrap       =g(wrap,"logical")
-  rotate     =g(rotate,"integer")
-  minDigits  =g(minDigits,"integer")
-  maxDigits  =g(maxDigits,"integer")
-  
-  ## computing internal variables
-  
-  arg_names <- names(formals(sys.function())) ## the argument names of the function
-  vals <- mget(arg_names, inherits = FALSE)   ## the values now inside this function
-  .key=paste(vals, collapse = "|")
-  
-  if (is.na(color)){
-    .color=NA_character_
-  } else {
-    rgb <- col2rgb(color)
-    .color=sprintf("#%02X%02X%02X", rgb[1], rgb[2], rgb[3])
-  }
-  
-  if (is.na(cellcolor)){
-    .cellcolor=NA_character_
-  } else {
-    rgb <- col2rgb(cellcolor)
-    .cellcolor=sprintf("#%02X%02X%02X", rgb[1], rgb[2], rgb[3])
-  }
-  
-  
-  
-  new("ODSstyle",
-      font=font,
-      size=size,
-      color=color,
-      bold=bold,
-      italic=italic,
-      underline=underline,
-      cellcolor=cellcolor,
-      vAlign=vAlign,
-      hAlign=hAlign, 
-      margin=margin,
-      wrap=wrap, 
-      rotate=rotate,
-      minDigits=minDigits,
-      maxDigits=maxDigits,
-      .color=.color,
-      .cellcolor=.cellcolor,
-      .key=.key)
 }
 
 
@@ -188,7 +81,22 @@ SHEET <- R6Class("ODSsheet",
                    ),
                    colWidths=c(),
                    rowHeights=c(),
-                   styles = list(),
+                   stylesTable = data.table(
+                     font = character(),
+                     size = integer(),
+                     color= character(),
+                     bold = logical(),
+                     italic=logical(),
+                     underline=logical(),
+                     cellcolor=character(),
+                     vAlign=character(),
+                     hAlign=character(), 
+                     margin=numeric(),
+                     wrap=logical(), 
+                     rotate=integer(),
+                     minDigits=integer(),
+                     maxDigits=integer()
+                   ),
                    
                    
                    
@@ -223,7 +131,14 @@ SHEET <- R6Class("ODSsheet",
                      cat(bold("colWidths:   "),self$colWidths,"\n")
                      cat(bold("rowHeights:  "),self$rowHeights,"\n")
                      cat(bold("styles:"),"\n")
-                     print(self$styles)
+                     for (i in seq_len(nrow(self$stylesTable))){
+                       cat("style ",i,":\n",sep="")
+                       temp=as.list(self$stylesTable[i,])
+                       temp=temp[!sapply(temp, is.na)]
+                       for (name in names(temp)){
+                         cat("  ",name,": ",temp[[name]],"\n", sep = "")
+                       }
+                     }
                    },
                    
                    
@@ -310,14 +225,15 @@ ODS_writeData <- function(sheet, data, startRow, startCol, style, useColnames=TR
   
   if (!is.matrix(array)){array=matrix(array)}
   
-  ## Does this style already exist?
-  keys <- vapply(sheet$styles, function(st) slot(st, ".key"), character(1))
+  ## Handling the style, i.e. does it already exist?
+  if (length(style)==0){style=list(font=NA)} ## otherwise we would introduce a bug
+  sheet$stylesTable=rbind(sheet$stylesTable,style,fill=TRUE)
   
-  if (any(keys==style@.key)){ ## style already exists:
-    styleNumber=which(keys==style@.key)[1]
-  } else {
-    sheet$styles <- append(sheet$styles, list(style))
-    styleNumber=length(sheet$styles)
+  keys=apply(sheet$stylesTable, 1, paste, collapse = "|*")
+  styleNumber=match(tail(keys,1), keys)
+  
+  if (styleNumber<length(keys)){## the style already existed
+    sheet$stylesTable=sheet$stylesTable[-nrow(sheet$stylesTable)]
   }
   
   
@@ -413,45 +329,32 @@ ODS_setRowHeights <- function(sheet,rows,height="15pt"){
 
 ODS_write <- function(sheet, file="file.ods"){
   if (!"ODSsheet" %in% class(sheet)){stop("'sheet' must be an ODSsheet")}
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~
+  ### Preparing the data ###
+  #~~~~~~~~~~~~~~~~~~~~~~~~~
+  
   sheet$cleanup()
-  DEFAULTS=c(colWidth="1.7cm",
-             rowHeight="15pt",
-             font="Calibri",
-             size=11,
-             color="black",
-             bold=FALSE,
-             italic=FALSE,
-             underline=FALSE,
-             cellcolor="transparent",
-             vAlign="bottom",
-             hAlign="left",
-             margin=0,
-             wrap=FALSE,
-             rotate=0,
-             minDigits=0,
-             maxDigits=6,
-             .color="#000000",
-             .cellcolor="transparent")
+  DEFAULTS=list(colWidth="1.7cm", rowHeight="15pt", font="Calibri", size=11,
+                color="black", bold=FALSE, italic=FALSE, underline=FALSE, 
+                cellcolor="transparent", vAlign="bottom", hAlign="left", 
+                margin=0, wrap=FALSE, rotate=0, minDigits=0, maxDigits=6)
   
   # 0.1 NA style slots  ####
   
-  # We will create the tabel "AA_stylesTable
-  AA_stylesTable=matrix(nrow=length(sheet$styles), ncol=length(slotNames("ODSstyle")), dimnames=list(NULL, slotNames("ODSstyle")))
-  AA_stylesTable=cbind(styleName=paste0(rep("style", length(sheet$styles)), seq_along(sheet$styles)),AA_stylesTable)
-  for (i in seq_along(sheet$styles)){
-    Style=sheet$styles[[i]]
-    for (slotName in slotNames("ODSstyle")){
-      AA_stylesTable[i,slotName]=slot(Style,slotName)
-    }
-  }
+  # We will create the table "AA_stylesTable"
+  AA_stylesTable=copy(sheet$stylesTable)
+  AA_stylesTable[,styleName:=paste0("style", seq_len(.N))]
   
   # Replace missing with default values:
-  for (attribute in colnames(AA_stylesTable)){
-    AA_stylesTable[is.na(AA_stylesTable[,attribute]),attribute]=DEFAULTS[attribute]
+  AA_stylesTable[,color:=col2hex(color)]
+  AA_stylesTable[,cellcolor:=col2hex(cellcolor)]
+  for (attribute in colnames(AA_stylesTable)) {
+    AA_stylesTable[is.na(get(attribute)), (attribute) := DEFAULTS[[attribute]]]
   }
   AA_stylesTable[,"size"  ]=paste0(AA_stylesTable[,"size"  ],"pt")
   AA_stylesTable[,"margin"]=paste0(AA_stylesTable[,"margin"],"cm")
-  if (any(as.double(AA_stylesTable[,"minDigits"])>as.double(AA_stylesTable[,"maxDigits"]))){stop("We must have minDigits<=maxDigits")}
+  if (nrow(AA_stylesTable[minDigits>maxDigits,])!=0){stop("We must have minDigits<=maxDigits")}
   
   # 0.2 cells information ####
   AA_cellsContent=copy(sheet$cellsContent)
@@ -460,16 +363,16 @@ ODS_write <- function(sheet, file="file.ods"){
   # 0.3 col/row styles ####
   
   ## defining row and column styles
-  colWidths=c(sheet$colWidths,DEFAULTS["colWidth"]) #not elegant, but works well
-  colWidths[is.na(colWidths)]=DEFAULTS["colWidth"]
+  colWidths=c(sheet$colWidths,NA) #not elegant, but works well
+  colWidths[is.na(colWidths)]=DEFAULTS[["colWidth"]]
   AA_colStylesDef=matrix(nrow=length(unique(colWidths)),ncol=2,dimnames=list(NULL, c("colStyleName", "width")))
   AA_colStylesDef[,"colStyleName"]=paste0("co",seq_len(nrow(AA_colStylesDef)))
   AA_colStylesDef[,"width"]=unique(colWidths)
   lookup <- setNames(AA_colStylesDef[, "colStyleName"], AA_colStylesDef[, "width"])
   AA_colStyle <- unname(lookup[colWidths])
   
-  rowHeights=c(sheet$rowHeights,DEFAULTS["rowHeight"]) #not elegant, but works well
-  rowHeights[is.na(rowHeights)]=DEFAULTS["rowHeight"]
+  rowHeights=c(sheet$rowHeights,NA) #not elegant, but works well
+  rowHeights[is.na(rowHeights)]=DEFAULTS[["rowHeight"]]
   AA_rowStylesDef=matrix(nrow=length(unique(rowHeights)),ncol=2,dimnames=list(NULL, c("rowStyleName", "height")))
   AA_rowStylesDef[,"rowStyleName"]=paste0("ro",seq_len(nrow(AA_rowStylesDef)))
   AA_rowStylesDef[,"height"]=unique(rowHeights)
@@ -514,6 +417,9 @@ ODS_write <- function(sheet, file="file.ods"){
     AA_specialCells=rbind(AA_specialCells,tmp,fill=TRUE)
   }
   
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ### From here on, we only access these "AA_..." variables ###
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
   if (FALSE){## debug
     AA_cellsContent<<-AA_cellsContent
@@ -607,8 +513,8 @@ ODS_write <- function(sheet, file="file.ods"){
     xml_add_child(
       ffd,
       "style:font-face",
-      `style:name` = "Arial",
-      `svg:font-family` = "Arial"
+      `style:name`      = DEFAULTS[["font"]],
+      `svg:font-family` = DEFAULTS[["font"]]
     )
     
     
@@ -636,8 +542,8 @@ ODS_write <- function(sheet, file="file.ods"){
       xml_add_child(
         ns,
         "number:number",
-        `number:min-decimal-places` = AA_stylesTable[i,"minDigits"],
-        `number:decimal-places` = AA_stylesTable[i,"maxDigits"],
+        `number:min-decimal-places` = AA_stylesTable[i,minDigits],
+        `number:decimal-places`     = AA_stylesTable[i,maxDigits],
         `number:min-integer-digits` = "1"
       )
     }
@@ -662,13 +568,13 @@ ODS_write <- function(sheet, file="file.ods"){
     xml_add_child(
       default_style,
       "style:text-properties",
-      `fo:color`               =DEFAULTS[".color"],
-      `style:font-name`        =DEFAULTS["font"],
-      `style:font-name-asian`  =DEFAULTS["font"],
-      `style:font-name-complex`=DEFAULTS["font"],
-      `fo:font-size`           =paste0(DEFAULTS["size"],"pt"),
-      `style:font-size-asian`  =paste0(DEFAULTS["size"],"pt"),
-      `style:font-size-complex`=paste0(DEFAULTS["size"],"pt")
+      `fo:color`               =DEFAULTS[["color"]],
+      `style:font-name`        =DEFAULTS[["font"]],
+      `style:font-name-asian`  =DEFAULTS[["font"]],
+      `style:font-name-complex`=DEFAULTS[["font"]],
+      `fo:font-size`           =paste0(DEFAULTS[["size"]],"pt"),
+      `style:font-size-asian`  =paste0(DEFAULTS[["size"]],"pt"),
+      `style:font-size-complex`=paste0(DEFAULTS[["size"]],"pt")
     )
     
     # automatic-styles
@@ -751,8 +657,8 @@ ODS_write <- function(sheet, file="file.ods"){
     # <office:font-face-decls>
     ff <- xml_add_child(doc, "office:font-face-decls")
     xml_add_child(ff, "style:font-face",
-                  `style:name` = "Calibri",
-                  `svg:font-family` = "Calibri"
+                  `style:name`     =DEFAULTS[["font"]],
+                  `svg:font-family`=DEFAULTS[["font"]]
     )
     
     # <office:automatic-styles>
@@ -773,7 +679,7 @@ ODS_write <- function(sheet, file="file.ods"){
                          `style:family` = "table-column")
     xml_add_child(co0, "style:table-column-properties",
                   `fo:break-before` = "auto",
-                  `style:column-width` = DEFAULTS["colWidth"])
+                  `style:column-width` = DEFAULTS[["colWidth"]])
     
     for (i in seq_len(nrow(AA_colStylesDef))){
       col <- xml_add_child(as, "style:style",
@@ -793,7 +699,7 @@ ODS_write <- function(sheet, file="file.ods"){
     )
     xml_add_child(ro0, "style:table-row-properties",
                   `fo:break-before` = "auto",
-                  `style:row-height` = DEFAULTS["rowHeight"],
+                  `style:row-height` = DEFAULTS[["rowHeight"]],
                   `style:use-optimal-row-height` = "true"
     )
     
@@ -813,7 +719,7 @@ ODS_write <- function(sheet, file="file.ods"){
     ## MAIN MODIFICATION: ADDING STYLES
     for (i in seq_len(nrow(AA_stylesTable))){
       xxx<- xml_add_child(as, "style:style",
-                          `style:name` = AA_stylesTable[i,"styleName"],
+                          `style:name` = AA_stylesTable[i,styleName],
                           `style:family` = "table-cell",
                           `style:parent-style-name` = "Default",
                           `style:data-style-name` = paste0("N",i)
@@ -822,47 +728,47 @@ ODS_write <- function(sheet, file="file.ods"){
       ## this node is not always necessary... lets see if i can just include it always...
       ## also, there would be style:repeat-content="false" when we deal with alignments... I dont know what that is
       node <-xml_add_child(xxx, "style:table-cell-properties",
-                           `style:vertical-align` = AA_stylesTable[i,"vAlign"])
+                           `style:vertical-align` = AA_stylesTable[i,vAlign])
       
-      if (AA_stylesTable[i,".cellcolor"]!="transparent"){xml_set_attr(node, "fo:background-color",AA_stylesTable[i,".cellcolor"])}
-      if (AA_stylesTable[i,"wrap"]     =="TRUE"       ){xml_set_attr(node, "fo:wrap-option","wrap")}
-      if (AA_stylesTable[i,"rotate"]   !="0"          ){xml_set_attr(node, "style:rotation-angle",AA_stylesTable[i,"rotate"])}
+      if (AA_stylesTable[i,cellcolor]!="transparent"){xml_set_attr(node, "fo:background-color",AA_stylesTable[i,cellcolor])}
+      if (AA_stylesTable[i,wrap]     ==FALSE        ){xml_set_attr(node, "fo:wrap-option","wrap")}
+      if (AA_stylesTable[i,rotate]   !=0            ){xml_set_attr(node, "style:rotation-angle",AA_stylesTable[i,rotate])}
       
       ## this node is not always necessary... 
-      if (AA_stylesTable[i,"hAlign"]=="middle"){
+      if (AA_stylesTable[i,hAlign]=="middle"){
         node <-xml_add_child(xxx, "style:paragraph-properties",
                              `fo:text-align` = "center")}
-      if (AA_stylesTable[i,"hAlign"]=="left"){
+      if (AA_stylesTable[i,hAlign]=="left"){
         node <-xml_add_child(xxx, "style:paragraph-properties",
                              `fo:text-align` = "start",
-                             `fo:margin-left`= AA_stylesTable[i,"margin"])}
-      if (AA_stylesTable[i,"hAlign"]=="right"){
+                             `fo:margin-left`= AA_stylesTable[i,margin])}
+      if (AA_stylesTable[i,hAlign]=="right"){
         node <-xml_add_child(xxx, "style:paragraph-properties",
                              `fo:text-align`  ="end",
-                             `fo:margin-right`=AA_stylesTable[i,"margin"])}
+                             `fo:margin-right`=AA_stylesTable[i,margin])}
       
       
       node <-xml_add_child(xxx, "style:text-properties",
-                           `fo:color` = AA_stylesTable[i,".color"],
-                           `style:font-name`         = AA_stylesTable[i,"font"],
-                           `style:font-name-asian`   = AA_stylesTable[i,"font"],
-                           `style:font-name-complex` = AA_stylesTable[i,"font"],
-                           `style:font-size`         = AA_stylesTable[i,"size"],
-                           `style:font-size-asian`   = AA_stylesTable[i,"size"],
-                           `style:font-size-complex` = AA_stylesTable[i,"size"]
+                           `fo:color` = AA_stylesTable[i,color],
+                           `style:font-name`         = AA_stylesTable[i,font],
+                           `style:font-name-asian`   = AA_stylesTable[i,font],
+                           `style:font-name-complex` = AA_stylesTable[i,font],
+                           `style:font-size`         = AA_stylesTable[i,size],
+                           `style:font-size-asian`   = AA_stylesTable[i,size],
+                           `style:font-size-complex` = AA_stylesTable[i,size]
       )
       
-      if (AA_stylesTable[i,"bold"]=="TRUE"){
+      if (AA_stylesTable[i,bold]){
         xml_set_attr(node, "fo:font-weight",           "bold")
         xml_set_attr(node, "style:font-weight-asian",  "bold")
         xml_set_attr(node, "style:font-weight-complex","bold")
       }
-      if (AA_stylesTable[i,"italic"]=="TRUE"){
+      if (AA_stylesTable[i,italic]){
         xml_set_attr(node, "fo:font-style",           "italic")
         xml_set_attr(node, "style:font-style-asian",  "italic")
         xml_set_attr(node, "style:font-style-complex","italic")
       }
-      if (AA_stylesTable[i,"underline"]=="TRUE"){
+      if (AA_stylesTable[i,underline]){
         xml_set_attr(node, "style:text-underline-style", "solid")
         xml_set_attr(node, "style:text-underline-type", "single")
       }
@@ -964,7 +870,7 @@ ODS_write <- function(sheet, file="file.ods"){
       }
       
       # finish the row:
-      xml_add_child(row, "table:table-cell",`table:number-columns-repeated` = 16384-maxCOL)
+      xml_add_child(row, "table:table-cell",`table:number-columns-repeated` = 2^14-maxCOL)
       
     }
     
@@ -1033,8 +939,6 @@ ODS_write <- function(sheet, file="file.ods"){
 # rotate does not rotate more than 90 degrees
 # multiple sheets
 # complete number formats
-# vectorize input
-# change from "matrix" to "data.table", for instance AA_stylesTable
 # ODS_writeCell(sheet,1L,1,1) is not displayed correctly
 # include NA/NaN/Inf handling in the style
 
