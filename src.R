@@ -823,6 +823,16 @@ ODS_write <- function(sheet, file="file.ods"){
     maxROW=max(AA_specialCells[,row],AA_cellsContent[,row],length(AA_rowStyle),0)
     
     for (rowNr in seq_len(maxROW)){
+      ### <progress bar> ###
+      if (rowNr==1){progress=0}
+      if (rowNr/maxROW>progress/100){
+        progress=progress+1
+        p=round(progress/5)
+        if (progress!=100){cat("|",rep("=",p),">",rep(" ",40-2*p),"<",rep("=",p),"|  ",progress,"%\r",sep = "")}
+      }
+      if (rowNr==maxROW){cat("|",rep("=",42),"|  100%\n",sep = "")}
+      ### </progress bar> ###
+      
       row <- xml_add_child(tbl, "table:table-row",`table:style-name` = AA_rowStyle[rowNr])
       
       maxCOL=max(AA_specialCells[row==rowNr,column],AA_cellsContent[row==rowNr,column],0)
