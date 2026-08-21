@@ -199,7 +199,7 @@ ODS_writeCell <- function(sheet, data, row, col, style){
 }
 
 
-ODS_writeData <- function(sheet, data, startRow, startCol, style, useColnames=TRUE, styleColnames){
+ODS_writeData <- function(sheet, data, startRow=1, startCol=1, style, useColnames=TRUE, styleColnames){
   if (missing(style        )){style        =ODS_createStyle()}
   if (missing(styleColnames)){styleColnames=ODS_createStyle()}
   
@@ -243,7 +243,7 @@ ODS_writeData <- function(sheet, data, startRow, startCol, style, useColnames=TR
   col=c(col(array))+startCol-1
   
   
-  if (typeof(array)%in%c("integer","double","numeric")){
+  if (typeof(array)%in%c("integer","double")){
     df=data.table(row=row,column=col,type="float",data_string=NA,data_float=unwind,styleNumber=styleNumber)
   } else {
     unwind=as.character(unwind)
@@ -303,22 +303,15 @@ ODS_mergeCells <- function(sheet, rows, cols, mergeCols=TRUE, mergeRows=TRUE){
 }
 
 
-ODS_setColWidths <- function(sheet,cols,width="1.7cm"){
-  if (is.numeric(width)){heigt=paste0(width,"cm")}
-  m=max(cols)
-  c=length(sheet$colWidths)
-  if (c<m){sheet$colWidths=c(sheet$colWidths,rep(NA,m-c))}
-  sheet$colWidths[cols]=width
+ODS_setColWidths <- function(sheet,cols,width=1.7,unit="cm"){
+  ## auto is missing for now. Also NAs maybe
+  sheet$colWidths[cols]=paste0(width,unit)
 }
 
 
-
-ODS_setRowHeights <- function(sheet,rows,height="15pt"){
-  if (is.numeric(height)){height=paste0(height,"pt")}
-  m=max(rows)
-  c=length(sheet$rowHeights)
-  if (c<m){sheet$rowHeights=c(sheet$rowHeights,rep(NA,m-c))}
-  sheet$rowHeights[rows]=height
+ODS_setRowHeights <- function(sheet,rows,height=15,unit="pt"){
+  ## auto is missing for now. Also NAs maybe
+  sheet$rowHeights[rows]=paste0(height,unit)
 }
 
 
@@ -352,8 +345,8 @@ ODS_write <- function(sheet, file="file.ods"){
   for (attribute in colnames(AA_stylesTable)) {
     AA_stylesTable[is.na(get(attribute)), (attribute) := DEFAULTS[[attribute]]]
   }
-  AA_stylesTable[,"size"  ]=paste0(AA_stylesTable[,"size"  ],"pt")
-  AA_stylesTable[,"margin"]=paste0(AA_stylesTable[,"margin"],"cm")
+  AA_stylesTable[,size:=paste0(size,"pt")]
+  AA_stylesTable[,margin:=paste0(margin,"cm")]
   if (nrow(AA_stylesTable[minDigits>maxDigits,])!=0){stop("We must have minDigits<=maxDigits")}
   
   # 0.2 cells information ####
@@ -430,9 +423,9 @@ ODS_write <- function(sheet, file="file.ods"){
   }
   
   
-  # 1.1 mimetype  ####
+  # 1.1 minetype  ####
   {
-    LOCAL_MIMETYPE="application/vnd.oasis.opendocument.spreadsheet"
+    LOCAL_MINETYPE="application/vnd.oasis.opendocument.spreadsheet"
   }
   
   
@@ -731,7 +724,7 @@ ODS_write <- function(sheet, file="file.ods"){
                            `style:vertical-align` = AA_stylesTable[i,vAlign])
       
       if (AA_stylesTable[i,cellcolor]!="transparent"){xml_set_attr(node, "fo:background-color",AA_stylesTable[i,cellcolor])}
-      if (AA_stylesTable[i,wrap]     ==FALSE        ){xml_set_attr(node, "fo:wrap-option","wrap")}
+      if (AA_stylesTable[i,wrap]     ==TRUE         ){xml_set_attr(node, "fo:wrap-option","wrap")}
       if (AA_stylesTable[i,rotate]   !=0            ){xml_set_attr(node, "style:rotation-angle",AA_stylesTable[i,rotate])}
       
       ## this node is not always necessary... 
@@ -922,7 +915,7 @@ ODS_write <- function(sheet, file="file.ods"){
     
     write_xml(LOCAL_CONTENT, "TEMP/content.xml")
     write_xml(LOCAL_META, "TEMP/meta.xml")
-    write(LOCAL_MIMETYPE,"TEMP/minetype")
+    write(LOCAL_MINETYPE,"TEMP/minetype")
     write_xml(LOCAL_STYLES, "TEMP/styles.xml")
     
     
