@@ -316,6 +316,23 @@ ODS_mergeCells <- function(sheet, rows, cols, mergeCols=TRUE, mergeRows=TRUE){
 }
 
 
+ODS_getStyle <- function(sheet,row,col){
+  r=row
+  c=col
+  styleNumber=sheet$cellsContent[row==r & column==c,styleNumber]
+  if (length(styleNumber)==0){
+    warning("cell has no assigned style")
+    return(ODS_createStyle())
+  }
+  
+  styleNumber=tail(styleNumber,1) ## if cell was overwritten, take last style
+  style=as.list(sheet$stylesTable[styleNumber])
+  style=style[!sapply(style, is.na)]
+  class(style)="ODSstyle"
+  return(style)
+}
+
+
 ODS_setColWidths <- function(sheet,cols,width=1.7,unit="cm"){
   ## auto is missing for now. Also NAs maybe
   sheet$colWidths[cols]=paste0(width,unit)
