@@ -60,6 +60,23 @@ print.ODSstyle <- function(style){
 }
 
 
+ODS_mergeStyles <- function(style1,style2){
+  ## style1 has priority!
+  ## i.e. fills empty slots of style1 with style2
+  if (!class(style1)=="ODSstyle"){stop("style1 must be an ODSstyle")}
+  if (!class(style2)=="ODSstyle"){stop("style2 must be an ODSstyle")}
+      
+  style <- style2
+  for (name in names(style1)) {
+    style[[name]] <- style1[[name]]
+  }
+  class(style) <- "ODSstyle"
+  
+  return(style)
+}
+
+
+
 #~~~~~~~~~~~~~~~~~~~~~
 ### 2.2. ODSsheet ####
 #~~~~~~~~~~~~~~~~~~~~~
@@ -280,18 +297,14 @@ ODS_mergeCells <- function(sheet, rows, cols, mergeCols=TRUE, mergeRows=TRUE){
     return(FALSE)
   }
   
-  if (!mergeCols & !mergeRows){
-    stop("You are about to merge ... nothing")
-  }
-  if (mergeCols & mergeCols){
-    news=cbind(fromRow=min(rows),toRow=max(rows),fromColumn=min(cols),toColumn=max(cols))
-  }
-  if (mergeCols & !mergeRows){
-    news=cbind(fromRow=rows,toRow=rows,fromColumn=min(cols),toColumn=max(cols))
-  }
-  if (!mergeCols & mergeRows){
-    news=cbind(fromRow=min(rows),toRow=max(rows):max(rows),fromColumn=cols,toColumn=cols)
-  }
+  if (!mergeCols & !mergeRows){stop("You cannot merge single cells")}
+  
+  if ( mergeCols){fromColumn=min(cols); toColumn=max(cols)}
+  if (!mergeCols){fromColumn=cols;      toColumn=cols}
+  if ( mergeRows){fromRow=min(rows);    toRow=max(rows)}
+  if (!mergeRows){fromRow=rows;         toRow=rows}
+  
+  news=cbind(fromRow,toRow,fromColumn,toColumn)
   
   result=overlapps(sheet$mergedCells,news)
   if (length(result)!=1){
