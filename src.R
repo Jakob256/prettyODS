@@ -277,9 +277,12 @@ ODS_writeData <- function(sheet, data, startRow=1, startCol=1, style, useColname
 
 
 ODS_mergeCells <- function(sheet, rows, cols, mergeCols=TRUE, mergeRows=TRUE){
-  if (min(cols)==max(cols) & min(rows)==max(rows)){stop("You cannot merge a single cell; you are stupid...")}
-  if (!mergeCols & min(rows)==max(rows)){stop("You are about to merge ... nothing")}
-  if (!mergeRows & min(cols)==max(cols)){stop("You are about to merge ... nothing")}
+  error1 = (min(cols)==max(cols) & min(rows)==max(rows))
+  error2 = (!mergeCols & min(rows)==max(rows))
+  error3 = (!mergeRows & min(cols)==max(cols))
+  error4 = (!mergeCols & !mergeRows)
+  if (error1 | error2 | error3 | error4){stop("You cannot merge single cells")}
+  
   
   overlapps <- function(mergedCells,news){
     for (i in seq_len(nrow(mergedCells))){
@@ -297,7 +300,6 @@ ODS_mergeCells <- function(sheet, rows, cols, mergeCols=TRUE, mergeRows=TRUE){
     return(FALSE)
   }
   
-  if (!mergeCols & !mergeRows){stop("You cannot merge single cells")}
   
   if ( mergeCols){fromColumn=min(cols); toColumn=max(cols)}
   if (!mergeCols){fromColumn=cols;      toColumn=cols}
@@ -938,27 +940,36 @@ ODS_write <- function(sheet, file="file.ods"){
   
   # 2.1 writing  ####
   {
-    if (!dir.exists("TEMP")){dir.create("TEMP")}
-    if (!dir.exists("TEMP/META-INF")){dir.create("TEMP/META-INF")}
+    tempdir_ods=tempfile("prettyods_")
+    dir.create(tempdir_ods)
+    on.exit(unlink(tempdir_ods, recursive=TRUE), add=TRUE)
+    dir.create(file.path(tempdir_ods,"META-INF"))
     
-    write_xml(LOCAL_MANIFEST, "TEMP/META-INF/manifest.xml")
+    write_xml(LOCAL_MANIFEST,file.path(tempdir_ods,"META-INF","manifest.xml"))
+    write_xml(LOCAL_CONTENT ,file.path(tempdir_ods,"content.xml"))
+    write_xml(LOCAL_META    ,file.path(tempdir_ods,"meta.xml"))
+    write(    LOCAL_MINETYPE,file.path(tempdir_ods,"mimetype"))
+    write_xml(LOCAL_STYLES  ,file.path(tempdir_ods,"styles.xml"))
     
-    write_xml(LOCAL_CONTENT, "TEMP/content.xml")
-    write_xml(LOCAL_META, "TEMP/meta.xml")
-    write(LOCAL_MINETYPE,"TEMP/minetype")
-    write_xml(LOCAL_STYLES, "TEMP/styles.xml")
     
-    
-    wd=getwd()
-    setwd("./TEMP")
-    files <- list.files(recursive = T)
+    ## 1. zipping the files
+    temp_ods=tempfile(fileext=".ods")
     result=try({
-      zip::zip(zipfile = paste0("../",file), files = files)
-    },silent = T)
-    setwd(wd)
-    unlink("TEMP", recursive = TRUE)
+      zip::zip(zipfile=temp_ods,files=list.files(tempdir_ods,recursive=T),
+               include_directories=FALSE,recurse=TRUE,
+               mode="cherry-pick",root=tempdir_ods)
+    },silent=T)
     
-    if (inherits(result, "try-error")){
+    if (inherits(result,"try-error")){
+      stop("I am very sorry, but something went wrong while creating the ODS file")
+    }
+    on.exit(unlink(temp_ods, recursive=TRUE), add=TRUE)
+    
+    
+    
+    ## 2. moving to the correct location
+    result=suppressWarnings(file.copy(temp_ods,file,overwrite=TRUE))
+    if (!result){
       stop(paste0("I am very sorry, but it seems that ",file," is currently open:("))
     }
   }
