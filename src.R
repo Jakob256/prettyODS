@@ -220,10 +220,10 @@ ODS_writeData <- function(sheet, data, startRow=1, startCol=1, style, useColname
   if (missing(style        )){style        =ODS_createStyle()}
   if (missing(styleColnames)){styleColnames=ODS_createStyle()}
   
-  if ("data.frame" %in% class(data)){
+  if (is.data.frame(data)){ ## includes data.table and tibble
     if (useColnames){
-      colNames=colnames(data)
-      .ODS_writeArray(sheet,matrix(colNames,ncol=length(data)),startRow,startCol,styleColnames)
+      colNames=matrix(colnames(data),nrow=1)
+      .ODS_writeArray(sheet,colNames,startRow,startCol,styleColnames)
     }
     for (i in seq_len(ncol(data))){
       column=matrix(data[[i]],ncol=1)
@@ -231,6 +231,22 @@ ODS_writeData <- function(sheet, data, startRow=1, startCol=1, style, useColname
     }
     return(invisible(sheet))
   }
+  
+  if (is.matrix(data)){
+    if (useColnames & !is.null(colnames(data))){
+      colNames=matrix(colnames(data),nrow=1)
+      .ODS_writeArray(sheet,colNames,startRow,startCol,styleColnames)
+      startRow=startRow+1
+    }
+    .ODS_writeArray(sheet,data,startRow,startCol,style)
+    return(invisible(sheet))
+  }
+  
+  if (is.atomic(data)){
+    .ODS_writeArray(sheet,matrix(data,ncol=1),startRow,startCol,style)
+    return(invisible(sheet))
+  }
+  
   stop("Not yet supported")
 }
 
