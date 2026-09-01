@@ -22,7 +22,7 @@ library(data.table)
 #~~~~~~~~~~~~~~~~~~~~~
 
 
-col2hex <- function(colors){
+.col2hex <- function(colors){
   rgb=col2rgb(colors)
   hex=sprintf("#%02X%02X%02X", rgb[1,], rgb[2,], rgb[3,])
   hex[is.na(colors)]=NA
@@ -40,8 +40,8 @@ ODS_createStyle <- function(font=NULL, size=NULL, color=NULL, bold=NULL, italic=
   class(style)="ODSstyle"
   
   ## these throw an error, if the colors are not valid:
-  col2hex(color)
-  col2hex(cellcolor)
+  .col2hex(color)
+  .col2hex(cellcolor)
   
   
   
@@ -210,6 +210,7 @@ preview <- function(sheet){return(invisible(sheet$View()))}
 ODS_writeCell <- function(sheet, data, row, col, style){
   if (missing(style)){style=ODS_createStyle()}
   if (class(style)!="ODSstyle"){stop("'style' must be a style!")}
+  if (length(data)!=1){stop("data must have length 1. Consider using ODS_writeData")}
   
   .ODS_writeArray(sheet,data,row,col,style,skipNA = FALSE)  
   invisible(sheet)
@@ -247,7 +248,7 @@ ODS_writeData <- function(sheet, data, startRow=1, startCol=1, style, useColname
     return(invisible(sheet))
   }
   
-  stop("Not yet supported")
+  stop("Data type not yet supported")
 }
 
 
@@ -388,8 +389,8 @@ ODS_write <- function(sheet, file="file.ods"){
   AA_stylesTable[,styleName:=paste0("style", seq_len(.N))]
   
   # Replace missing with default values:
-  AA_stylesTable[,color:=col2hex(color)]
-  AA_stylesTable[,cellcolor:=col2hex(cellcolor)]
+  AA_stylesTable[,color:=.col2hex(color)]
+  AA_stylesTable[,cellcolor:=.col2hex(cellcolor)]
   for (attribute in colnames(AA_stylesTable)) {
     AA_stylesTable[is.na(get(attribute)), (attribute) := DEFAULTS[[attribute]]]
   }
@@ -468,12 +469,14 @@ ODS_write <- function(sheet, file="file.ods"){
     AA_stylesTable <<-AA_stylesTable
     AA_rowStyle<<-AA_rowStyle
     AA_colStyle<<-AA_colStyle
+    AA_colStylesDef<<-AA_colStylesDef
+    AA_rowStylesDef<<-AA_rowStylesDef
   }
   
   
-  # 1.1 minetype  ####
+  # 1.1 mimetype  ####
   {
-    LOCAL_MINETYPE="application/vnd.oasis.opendocument.spreadsheet"
+    LOCAL_MIMETYPE="application/vnd.oasis.opendocument.spreadsheet"
   }
   
   
@@ -865,11 +868,11 @@ ODS_write <- function(sheet, file="file.ods"){
     
     for (rowNr in seq_len(maxROW)){
       ### <progress bar> ###
-      if (rowNr==1){progress=0}
-      if (rowNr/maxROW>progress/100){
-        progress=progress+1
+      if (rowNr==1){progress=-1}
+      if (round(100*rowNr/maxROW) > progress){
+          round(100*rowNr/maxROW)-> progress # :-)
         p=round(progress/5)
-        if (progress!=100){cat("|",rep("=",p),">",rep(" ",40-2*p),"<",rep("=",p),"|  ",progress,"%\r",sep = "")}
+        cat("|",rep("=",p),">",rep(" ",40-2*p),"<",rep("=",p),"|  ",progress,"%\r",sep = "")
       }
       if (rowNr==maxROW){cat("|",rep("=",42),"|  100%\n",sep = "")}
       ### </progress bar> ###
@@ -964,7 +967,7 @@ ODS_write <- function(sheet, file="file.ods"){
     write_xml(LOCAL_MANIFEST,file.path(tempdir_ods,"META-INF","manifest.xml"))
     write_xml(LOCAL_CONTENT ,file.path(tempdir_ods,"content.xml"))
     write_xml(LOCAL_META    ,file.path(tempdir_ods,"meta.xml"))
-    write(    LOCAL_MINETYPE,file.path(tempdir_ods,"mimetype"))
+    write(    LOCAL_MIMETYPE,file.path(tempdir_ods,"mimetype"))
     write_xml(LOCAL_STYLES  ,file.path(tempdir_ods,"styles.xml"))
     
     
@@ -990,21 +993,3 @@ ODS_write <- function(sheet, file="file.ods"){
     }
   }
 }
-
-
-#~~~~~~~~~~~~~~~~~
-## Bugs/Todos ####
-#~~~~~~~~~~~~~~~~~
-
-# rotate does not rotate more than 90 degrees
-# multiple sheets
-# complete number formats
-# ODS_writeCell(sheet,1L,1,1) is not displayed correctly
-# include NA/NaN/Inf handling in the style
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~
-## Maybe look into ... ####
-#~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# even "text only" styles have a digits attribute... 
-
