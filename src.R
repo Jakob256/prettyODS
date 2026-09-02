@@ -32,8 +32,7 @@ library(data.table)
 
 ODS_createStyle <- function(font=NULL, size=NULL, color=NULL, bold=NULL, italic=NULL, 
                             underline=NULL, cellcolor=NULL, vAlign=NULL, hAlign=NULL, 
-                            margin=NULL, wrap=NULL, rotate=NULL, minDigits=NULL, 
-                            maxDigits=NULL){
+                            margin=NULL, wrap=NULL, rotate=NULL, digits=NULL){
   
   style=as.list(environment())
   style=style[!sapply(style, is.null)]
@@ -111,8 +110,7 @@ SHEET <- R6Class("ODSsheet",
                      margin=numeric(),
                      wrap=logical(), 
                      rotate=integer(),
-                     minDigits=integer(),
-                     maxDigits=integer()
+                     digits=integer()
                    ),
                    
                    
@@ -170,11 +168,16 @@ SHEET <- R6Class("ODSsheet",
                    
                    View = function(...){
                      self$cleanup()
-                     ## this needs to be adapted to the number-type
                      sheet = matrix(NA_character_,nrow=self$nrow(),ncol=self$ncol())
-                     text=self$cellsContent$data_string
-                     text[is.na(text)]=self$cellsContent$data_float[is.na(text)]
-                     sheet[cbind(self$cellsContent$row,self$cellsContent$column)]=text
+                     
+                     
+                     ## for displaying, we abuse the variable "cellsContent"
+                     stylesTable=self$stylesTable[,styleNumber:=seq_len(.N)]
+                     cellsContent=merge(self$cellsContent,stylesTable[,c("styleNumber","digits")])
+                     cellsContent[type=="float" &  is.na(digits),data_string:=as.character(data_float)]
+                     cellsContent[type=="float" & !is.na(digits),data_string:=round2character(data_float,digits)]
+                     
+                     sheet[cbind(cellsContent$row,cellsContent$column)]=cellsContent$data_string
                      sheet=data.table(sheet)
                      NAMES=LETTERS
                      while(self$ncol()>length(NAMES)){
@@ -206,6 +209,18 @@ preview <- function(sheet){return(invisible(sheet$View()))}
 #~~~~~~~~~~~~~~~~~~~
 ## 3. Functions ####
 #~~~~~~~~~~~~~~~~~~~
+
+
+# we want 1.65 to be rounded to 1.7 with digits=1. However
+#   round(1.65,1)=1.6
+#   sprintf("%.1f",1.65)="1.6"
+#   round2character(1.65,1)="1.7"
+# hence this unusual form:
+
+round2character <- function(x, digits){
+  sprintf(paste0("%.", digits, "f"), x*(1+2^(-48)))
+}
+
 
 ODS_writeCell <- function(sheet, data, row, col, style){
   if (missing(style)){style=ODS_createStyle()}
@@ -380,7 +395,7 @@ ODS_write <- function(sheet, file="file.ods"){
   DEFAULTS=list(colWidth="1.7cm", rowHeight="15pt", font="Calibri", size=11,
                 color="black", bold=FALSE, italic=FALSE, underline=FALSE, 
                 cellcolor="transparent", vAlign="bottom", hAlign="left", 
-                margin=0, wrap=FALSE, rotate=0, minDigits=0, maxDigits=6)
+                margin=0, wrap=FALSE, rotate=0, digits=NA)
   
   # 0.1 NA style slots  ####
   
@@ -396,11 +411,13 @@ ODS_write <- function(sheet, file="file.ods"){
   }
   AA_stylesTable[,size:=paste0(size,"pt")]
   AA_stylesTable[,margin:=paste0(margin,"cm")]
-  if (nrow(AA_stylesTable[minDigits>maxDigits,])!=0){stop("We must have minDigits<=maxDigits")}
+  
   
   # 0.2 cells information ####
   AA_cellsContent=copy(sheet$cellsContent)
   AA_cellsContent[,styleName:=paste0("style",styleNumber)]
+  AA_cellsContent=merge(AA_cellsContent,AA_stylesTable[,c("styleName","digits")])
+  
   
   # 0.3 col/row styles ####
   
@@ -583,13 +600,15 @@ ODS_write <- function(sheet, file="file.ods"){
         "number:number-style",
         `style:name` = paste0("N",i)
       )
-      xml_add_child(
+      nsc <- xml_add_child(
         ns,
         "number:number",
-        `number:min-decimal-places` = AA_stylesTable[i,minDigits],
-        `number:decimal-places`     = AA_stylesTable[i,maxDigits],
         `number:min-integer-digits` = "1"
       )
+      if (!is.na(AA_stylesTable[i,digits])){
+        xml_set_attr(nsc, "number:min-decimal-places",AA_stylesTable[i,digits])
+        xml_set_attr(nsc, "number:decimal-places",AA_stylesTable[i,digits])
+      }
     }
     
     
@@ -901,11 +920,18 @@ ODS_write <- function(sheet, file="file.ods"){
           cell <- xml_add_child(row, "table:table-cell",
                                  `office:value-type`= cellContent[,type],
                                  `table:style-name` = cellContent[,styleName])
+          
           if (cellContent[,type]=="float"){
             xml_set_attr(cell, "office:value", as.character(cellContent[,data_float]))
             p <- xml_add_child(cell, "text:p")
-            xml_set_text(p, as.character(cellContent[,data_float]))
+            digits=cellContent$digits
+            if (is.na(digits)){
+              xml_set_text(p, as.character(cellContent[,data_float]))
+            } else {
+              xml_set_text(p, round2character(cellContent[,data_float],digits))
+            }
           }
+          
           if (cellContent[,type]=="string"){
             p <- xml_add_child(cell, "text:p")
             xml_set_text(p, cellContent[,data_string])
