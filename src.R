@@ -172,7 +172,7 @@ SHEET <- R6Class("ODSsheet",
                      
                      
                      ## for displaying, we abuse the variable "cellsContent"
-                     stylesTable=self$stylesTable[,styleNumber:=seq_len(.N)]
+                     stylesTable=copy(self$stylesTable)[,styleNumber:=seq_len(.N)]
                      cellsContent=merge(self$cellsContent,stylesTable[,c("styleNumber","digits")])
                      cellsContent[type=="float" &  is.na(digits),data_string:=as.character(data_float)]
                      cellsContent[type=="float" & !is.na(digits),data_string:=round2character(data_float,digits)]
@@ -418,28 +418,7 @@ ODS_write <- function(sheet, file="file.ods"){
   AA_cellsContent[,styleName:=paste0("style",styleNumber)]
   AA_cellsContent=merge(AA_cellsContent,AA_stylesTable[,c("styleName","digits")])
   
-  
-  # 0.3 col/row styles ####
-  
-  ## defining row and column styles
-  colWidths=c(sheet$colWidths,NA) #not elegant, but works well
-  colWidths[is.na(colWidths)]=DEFAULTS[["colWidth"]]
-  AA_colStylesDef=matrix(nrow=length(unique(colWidths)),ncol=2,dimnames=list(NULL, c("colStyleName", "width")))
-  AA_colStylesDef[,"colStyleName"]=paste0("co",seq_len(nrow(AA_colStylesDef)))
-  AA_colStylesDef[,"width"]=unique(colWidths)
-  lookup <- setNames(AA_colStylesDef[, "colStyleName"], AA_colStylesDef[, "width"])
-  AA_colStyle <- unname(lookup[colWidths])
-  
-  rowHeights=c(sheet$rowHeights,NA) #not elegant, but works well
-  rowHeights[is.na(rowHeights)]=DEFAULTS[["rowHeight"]]
-  AA_rowStylesDef=matrix(nrow=length(unique(rowHeights)),ncol=2,dimnames=list(NULL, c("rowStyleName", "height")))
-  AA_rowStylesDef[,"rowStyleName"]=paste0("ro",seq_len(nrow(AA_rowStylesDef)))
-  AA_rowStylesDef[,"height"]=unique(rowHeights)
-  lookup <- setNames(AA_rowStylesDef[, "rowStyleName"], AA_rowStylesDef[, "height"])
-  AA_rowStyle <- unname(lookup[rowHeights])
-  
-  
-  # 0.4 special Cells  ####
+  # 0.3 special Cells  ####
   
   AA_specialCells= data.table(
     row = integer(),
@@ -449,7 +428,7 @@ ODS_write <- function(sheet, file="file.ods"){
     par2 = integer()
   )
   
-  ## 0.4.1: merged Cells ####
+  ## 0.3.1: merged Cells ####
   
   mc=data.table(copy(sheet$mergedCells))
   mc[,row:=fromRow]
@@ -460,7 +439,7 @@ ODS_write <- function(sheet, file="file.ods"){
   mc[, c("fromRow", "toRow", "fromColumn", "toColumn") := NULL]
   AA_specialCells=rbind(AA_specialCells,mc,fill=T)
   
-  ## 0.4.2: covered Cells ####
+  ## 0.3.2: covered Cells ####
   
   mc=sheet$mergedCells
   for (i in seq_len(nrow(mc))){
@@ -475,6 +454,29 @@ ODS_write <- function(sheet, file="file.ods"){
     tmp=tmp[-1,]
     AA_specialCells=rbind(AA_specialCells,tmp,fill=TRUE)
   }
+  
+  # 0.4 col/row styles ####
+  
+  ## defining row and column styles
+  colWidths=c(sheet$colWidths,NA) #not elegant, but works well
+  colWidths[is.na(colWidths)]=DEFAULTS[["colWidth"]]
+  AA_colStylesDef=matrix(nrow=length(unique(colWidths)),ncol=2,dimnames=list(NULL, c("colStyleName", "width")))
+  AA_colStylesDef[,"colStyleName"]=paste0("co",seq_len(nrow(AA_colStylesDef)))
+  AA_colStylesDef[,"width"]=unique(colWidths)
+  lookup <- setNames(AA_colStylesDef[, "colStyleName"], AA_colStylesDef[, "width"])
+  AA_colStyle <- unname(lookup[colWidths])
+  
+  maxROW=max(AA_specialCells[,row],AA_cellsContent[,row],length(sheet$rowHeights),0) ## later redefined
+  rowHeights=c(sheet$rowHeights,NA) #not elegant, but works well
+  if (length(rowHeights)<maxROW){length(rowHeights)=maxROW}
+  rowHeights[is.na(rowHeights)]=DEFAULTS[["rowHeight"]]
+  AA_rowStylesDef=matrix(nrow=length(unique(rowHeights)),ncol=2,dimnames=list(NULL, c("rowStyleName", "height")))
+  AA_rowStylesDef[,"rowStyleName"]=paste0("ro",seq_len(nrow(AA_rowStylesDef)))
+  AA_rowStylesDef[,"height"]=unique(rowHeights)
+  lookup <- setNames(AA_rowStylesDef[, "rowStyleName"], AA_rowStylesDef[, "height"])
+  AA_rowStyle <- unname(lookup[rowHeights])
+  
+  
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ### From here on, we only access these "AA_..." variables ###
