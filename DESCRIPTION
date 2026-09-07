@@ -1,0 +1,17 @@
+Package: prettyODS
+Title: Create Styled OpenDocument Spreadsheet ('.ods') Files
+Version: 0.0.0.9000
+Authors@R: 
+    person("Jakob", "Steininger", , "steininger.jakob@yahoo.com", role = c("aut", "cre"))
+Description: Create OpenDocument Spreadsheet ('.ods') files with detailed control over styling, including cell, text, and sheet formatting.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.1.0
+Imports: 
+    data.table,
+    grDevices,
+    R6,
+    utils,
+    xml2,
+    zip
