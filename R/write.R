@@ -620,7 +620,7 @@ ODS_write <- function(sheet, file="file.ods"){
     xml2::write_xml(LOCAL_MANIFEST,file.path(tempdir_ods,"META-INF","manifest.xml"))
     xml2::write_xml(LOCAL_CONTENT ,file.path(tempdir_ods,"content.xml"))
     xml2::write_xml(LOCAL_META    ,file.path(tempdir_ods,"meta.xml"))
-    write(          LOCAL_MIMETYPE,file.path(tempdir_ods,"mimetype"))
+    writeLines(     LOCAL_MIMETYPE,file.path(tempdir_ods,"mimetype"), sep = "")
     xml2::write_xml(LOCAL_STYLES  ,file.path(tempdir_ods,"styles.xml"))
 
 
@@ -628,8 +628,7 @@ ODS_write <- function(sheet, file="file.ods"){
     temp_ods=tempfile(fileext=".ods")
     result=try({
       zip::zip(zipfile=temp_ods,files=list.files(tempdir_ods,recursive=T),
-               include_directories=FALSE,recurse=TRUE,
-               mode="cherry-pick",root=tempdir_ods)
+               include_directories=TRUE,recurse=TRUE,root=tempdir_ods)
     },silent=T)
 
     if (inherits(result,"try-error")){
